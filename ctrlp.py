@@ -13,6 +13,7 @@ from ghidra.util.task import TaskMonitor
 from ghidra.app.script import GhidraScriptUtil
 from ghidra.app.util.viewer.field import ListingColors
 from javax.swing import JFrame, JTextField, JList, JScrollPane, SwingUtilities, JPanel, DefaultListCellRenderer, SwingWorker, UIManager
+from javax.swing.event import DocumentListener
 from java.lang import Object
 from java.awt import BorderLayout, Color, Font, GraphicsEnvironment
 from java.awt.event import KeyAdapter, KeyEvent
@@ -120,6 +121,7 @@ class SymbolFilterWindow(JFrame):
 
         font = Font(fontname, Font.PLAIN, 14)
         self.inputField.setFont(font)
+        self.inputField.getDocument().addDocumentListener(MyDocumentListener(self))
 
         self.symbolList = JList(Vector([]))
         self.updateList("")
@@ -254,6 +256,17 @@ class SymbolFilterWindow(JFrame):
             clipboard.setContents(string_selection, None)
 
 
+class MyDocumentListener(DocumentListener):
+    def __init__(self, parent):
+        self.parent = parent
+
+    def insertUpdate(self, e): self.update()
+    def removeUpdate(self, e): self.update()
+    def changedUpdate(self, e): self.update()
+    def update(self):
+        self.parent.updateList(self.parent.inputField.getText())
+
+
 class FilterKeyAdapter(KeyAdapter):
     def __init__(self, parent):
         self.parent = parent
@@ -294,14 +307,6 @@ class FilterKeyAdapter(KeyAdapter):
             self.parent.copyAddressToClipboard()
         elif event.isControlDown() and event.getKeyCode() == KeyEvent.VK_C:
             self.parent.copyToClipboard()
-
-    def keyReleased(self, event):
-        try:
-            if not event.getKeyChar() or event.isControlDown():
-                return
-        except:
-            return
-        self.parent.updateList(self.parent.inputField.getText())
 
 
 class SymbolCellRenderer(DefaultListCellRenderer):
