@@ -17,18 +17,6 @@ from java.awt import Toolkit
 from java.awt.datatransfer import StringSelection
 
 
-def theme_is_dark():
-    backgroundColor = UIManager.getColor("Panel.background")
-    if backgroundColor is None:
-        return False
-    if backgroundColor.getRed() + backgroundColor.getGreen() + backgroundColor.getBlue() > 500:
-        return False
-    return True
-
-
-IS_DARK = theme_is_dark()
-
-
 def matches(name, query):
     """Baby fuzzy matcher - splits query by whitespace, and matches
     if name contains every resulting element. For example,
@@ -127,7 +115,6 @@ class SymbolFilterWindow(JFrame):
         assert fontname is not None
 
         font = Font(fontname, Font.PLAIN, 14)
-
         self.inputField.setFont(font)
 
         self.symbolList = JList(Vector([]))
@@ -342,7 +329,7 @@ class SearchEntry:
     @property
     def text(self):
         if self.has_bookmark:
-            return self.raw_text + u" [⭐]"
+            return self.raw_text + u" [*]"
         return self.raw_text
 
     @property
@@ -414,10 +401,14 @@ def script_entry(scr):
 
 
 def component_provider_entry(cp):
+    def show_and_focus():
+        state.getTool().showComponentProvider(cp, True)
+        cp.toFront()
+
     return SearchEntry(
         "wnd " + str(cp),
         None,
-        lambda: cp.toFront()
+        show_and_focus
     )
 
 

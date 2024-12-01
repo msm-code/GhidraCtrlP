@@ -62,6 +62,10 @@ Searchable entries are defined for:
     * More generally, everything that you can assign a keyboard shortcut is possible to do from  the list.
     * Just remember that this is influenced by the current cursor location (just like context menu is).
 
+Some of the available data types are visible on the screenshot below:
+
+![](./docs/more.png)
+
 ### Slightly more advanced features
 
 **Keybindings**
@@ -72,7 +76,7 @@ Other than the obvious (arrows, home/end, page up/down), you can press:
 * `ESC` - close the current window without doing anything
 * `Ctrl+c` - copy a text of the highlighted element
 * `Ctrl+Shift+c` - copy address (if any) of the highlighted element
-* `Ctrl+d` - toggle a quick bookmark at the highlighted location (add, or remove if exists). Bookmarked symbols are shown with a star `[⭐]`.
+* `Ctrl+d` - toggle a quick bookmark at the highlighted location (add, or remove if exists). Bookmarked symbols are shown with a `[*]` tag at the end (hint: you can search filter by this too).
 
 **Filtering**
 
@@ -84,7 +88,9 @@ One exception is that if a chunk is equal to "fnc", "bkm", "scr"... exactly, the
 
 **Searching**
 
-One edgy feature that I added is the ability to search in the program memory. There are three modes:
+I want this plugin to remain focused on quick jumping/command execution, but there is one special command I've added: program memory search.
+
+If you start your search with `"`, `'` or `{`, you will get a list of search results instead of the usual contents. There are three modes:
 
 * `"` - Case sensitive text search 
 * `'` - Case insensitive text search 
@@ -92,16 +98,18 @@ One edgy feature that I added is the ability to search in the program memory. Th
 
 ![](./docs/quicksearch.png)
 
-It seems to work well in my tests, but it's **not** optimized, and it will hurt on large files.
+If you don't want this behaviour, you can disable it by prepending a space to your query.
 
-Yeah, in general this program is not optimized significantly (only startup time was optimized a bit).
+It seems to work well in my tests, but it's **not** optimized (it will rescan whole program memory for every typed character, blocking the UI thread). Don't use this with very big programs.
+
+In general, this script may not work efficiently with large programs (only startup time was optimized for now).
 
 **Other notes**
 
 The plugin tries to use `"FiraCode Nerd Font Mono"` font, and if that fails it falls back to `"Monospaced"`.
 In the future maybe I'll try to get the default font for listing for example.
 
-There is a support for dark theme (the same colors as in listing are used, but unrelated to their original semantics).
+There is a support for dark theme (the colors adjust themselves).
 
 ### Disclaimer
 
