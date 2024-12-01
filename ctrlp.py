@@ -1,7 +1,6 @@
 # coding: utf-8
 # @author msm
 # @category Search
-# @keybinding ctrl P
 # @menupath Search.Palette
 # @toolbar
 
