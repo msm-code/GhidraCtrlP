@@ -1,4 +1,9 @@
 # coding: utf-8
+# @author msm
+# @category Search
+# @keybinding ctrl P
+# @menupath Search.Palette
+# @toolbar
 
 import re
 from ghidra.program.flatapi import FlatProgramAPI
