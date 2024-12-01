@@ -381,8 +381,17 @@ def action_entry(context, act):
     def execme():
         act.actionPerformed(context)
 
+    suffix = ""
+    if act.keyBinding:
+        binding = str(act.keyBinding)
+        binding = binding.replace("pressed ", "")
+        binding = binding.replace(" ", "+")
+        # This will produce things like ctrl+shift+alt+A.
+        # I prefer emacs notation, so C-S-M-a, but I guess not everyone knows it.
+        suffix = " (" + binding + ")"
+
     return SearchEntry(
-        "act " + str(act),
+        "act " + act.name + suffix,
         None,
         execme
     )
