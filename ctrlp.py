@@ -225,7 +225,7 @@ class SymbolFilterWindow(JFrame):
             else:
                 getCurrentProgram().getBookmarkManager().setBookmark(
                     selected_symbol.address,
-                    BookmarkType.INFO,
+                    BookmarkType.NOTE,
                     "CtrlP",
                     "Quick bookmark. Query: " + self.inputField.getText()
                 )
