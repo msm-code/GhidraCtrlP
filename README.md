@@ -10,17 +10,20 @@ With this script you can just press Ctrl+P and do ~~anything~~ a lot.
 
 ### Installation
 
-I guess put it in `~/ghidra_scripts` or your prefered script location.
+**Mandatory:** Put `ctrlp.py` in `~/ghidra_scripts` or your prefered script location.
 Then go to `Window -> Script manager`, reload, and the script should be visible.
 
-I strongly recommend adding a keyboard shortcut to this script (doable from script manager).
-I'm not a cop, it's OK if you assign something else than `Ctrl+P`. If you do assign `Ctrl+P`
-remember to unasign `Print` in the `Tool Options -> Keybindings`, otherwise Ghidra will
+**Recommended:** Also put `CtrlPQuicklaunchScript.java` in the same directory, and assign
+a keyboard shortcut to it instead (this prefetches `ctrlp.py` on first run, and makes future executions faster).
+
+I strongly recommend adding a keyboard shortcut to this script (in `Window -> Script manager`).
+Despite the name, you can assign any hotkey you like (I use `Ctrl+P`). If you use `Ctrl+P`,
+remember to unasign `Print` from the `Tool Options -> Keybindings`, otherwise Ghidra will
 ask you an annoying question every time.
 
 ### Basic features
 
-When you press Ctrl+P, a modal window appears and you may enter a search term/command.
+When you trigger this script (remember to add a keybinding), a modal window appears and you may enter a search term/command.
 
 Searchable entries are defined for:
 
@@ -77,6 +80,7 @@ Other than the obvious (arrows, home/end, page up/down), you can press:
 * `Ctrl+c` - copy a text of the highlighted element
 * `Ctrl+Shift+c` - copy address (if any) of the highlighted element
 * `Ctrl+d` - toggle a quick bookmark at the highlighted location (add, or remove if exists). Bookmarked symbols are shown with a `[*]` tag at the end (hint: you can search filter by this too).
+* `Ctrl+q` - by default the window is only hidden when closed (to speed up future executions). Press this shortcut to forcefully really close the window. May be useful to restart script in case of a bug.
 
 **Filtering**
 

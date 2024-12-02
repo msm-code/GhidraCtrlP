@@ -14,9 +14,9 @@ from ghidra.app.script import GhidraScriptUtil
 from ghidra.app.util.viewer.field import ListingColors
 from javax.swing import JFrame, JTextField, JList, JScrollPane, SwingUtilities, JPanel, DefaultListCellRenderer, SwingWorker, UIManager
 from javax.swing.event import DocumentListener
-from java.lang import Object
-from java.awt import BorderLayout, Color, Font, GraphicsEnvironment
-from java.awt.event import KeyAdapter, KeyEvent
+from java.lang import Object, System
+from java.awt import BorderLayout, Color, Font, GraphicsEnvironment, Window
+from java.awt.event import KeyAdapter, KeyEvent, ComponentAdapter
 from java.util import Vector
 from java.awt import Toolkit
 from java.awt.datatransfer import StringSelection
@@ -41,20 +41,43 @@ def matches(name, query):
             return False
     return True
 
+
 class SymbolLoader(SwingWorker):
-    def __init__(self, parent, func):
+    def __init__(self, parent):
         super(SymbolLoader, self).__init__()
         self.parent = parent
-        self.func = func
+
+    def get_everything(self):
+        everything = []
+        everything += get_symbols()
+        everything += get_component_providers()
+        everything += get_bookmarks()
+        everything += get_actions()
+        everything += get_scripts()
+        return everything
 
     def doInBackground(self):
-        return self.func()
+        try:
+            return self.get_everything()
+        except:
+            # BUG TODO FIXME
+            # When Ghidra window is closed and then reopened, the references in the window stop making sense.
+            # and this thread/wtf is in a broken state.
+            # We should probably watch when ghidra window exits and then cleanup, but...
+            # Just kill ourselves and let user try again.
+            self.parent.dispose()
+            return []  # Just so we don't raise an exception in a second
 
     def done(self):
+        def refresh_data():
+            ndx = self.parent.symbolList.getSelectedIndex()
+            self.parent.updateList(self.parent.inputField.getText())
+            self.parent.symbolList.setSelectedIndex(ndx)
+
         try:
             symbols = self.get()
-            self.parent.symbols += symbols
-            SwingUtilities.invokeLater(lambda: self.parent.updateList(self.parent.inputField.getText()))
+            self.parent.symbols = symbols
+            SwingUtilities.invokeLater(refresh_data)
         except Exception as e:
             print("Error loading symbols" + str(e))
 
@@ -91,19 +114,24 @@ class SymbolFilterWindow(JFrame):
         self.filtered_symbols = symbols
         self.initUI()
         self.selected_index = 0
-        
-        SymbolLoader(self, get_symbols).execute()
-        SymbolLoader(self, get_component_providers).execute()
-        SymbolLoader(self, get_bookmarks).execute()
-        SymbolLoader(self, get_actions).execute()
-        SymbolLoader(self, get_scripts).execute()
 
     def initUI(self):
         self.setSize(1200, 600)
         self.setResizable(False)
         self.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE)
         self.getContentPane().setLayout(BorderLayout())
-        # self.setUndecorated(True)
+
+        me = self
+        class MyComponentAdapter(ComponentAdapter):
+            def componentShown(self, event):
+                me.inputField.setText("")
+                SymbolLoader(me).execute()
+
+            def componentHidden(self, event): pass
+            def componentMoved(self, event): pass
+            def componentResized(self, event): pass
+
+        self.addComponentListener(MyComponentAdapter())
 
         inputPanel = JPanel(BorderLayout())
         self.inputField = JTextField()
@@ -285,14 +313,14 @@ class FilterKeyAdapter(KeyAdapter):
 
     def keyPressed(self, event):
         if event.getKeyCode() == KeyEvent.VK_ENTER:
-            self.parent.dispose()
+            self.parent.setVisible(False)
             self.parent.runSelectedAction()
         elif event.getKeyCode() == KeyEvent.VK_UP:
             self.navigate(-1)
         elif event.getKeyCode() == KeyEvent.VK_DOWN:
             self.navigate(1)
         elif event.getKeyCode() == KeyEvent.VK_ESCAPE:
-            self.parent.dispose()
+            self.parent.setVisible(False)
         elif event.getKeyCode() == KeyEvent.VK_PAGE_DOWN:
             self.navigate(20)
         elif event.getKeyCode() == KeyEvent.VK_PAGE_UP:
@@ -303,10 +331,13 @@ class FilterKeyAdapter(KeyAdapter):
             self.navigate(-2**30)
         elif event.isControlDown() and event.getKeyCode() == KeyEvent.VK_D:
             self.parent.bookmarkSelectedLocation()
-        elif event.isShiftDown() and event.getKeyCode() == KeyEvent.VK_C:
+        elif event.isControlDown() and event.isShiftDown() and event.getKeyCode() == KeyEvent.VK_C:
             self.parent.copyAddressToClipboard()
         elif event.isControlDown() and event.getKeyCode() == KeyEvent.VK_C:
             self.parent.copyToClipboard()
+        elif event.isControlDown() and event.getKeyCode() == KeyEvent.VK_Q:
+            self.parent.dispose()
+            System.gc()
 
 
 class SymbolCellRenderer(DefaultListCellRenderer):
@@ -314,7 +345,6 @@ class SymbolCellRenderer(DefaultListCellRenderer):
         self.window = parent
 
     def getListCellRendererComponent(self, list, value, index, isSelected, cellHasFocus):
-
         component = super(SymbolCellRenderer, self).getListCellRendererComponent(
             list, value, index, isSelected, cellHasFocus)
 
@@ -444,8 +474,12 @@ def bookmark_entry(bookmark):
 
 
 def get_actions():
+    prov = state.getTool().getActiveComponentProvider()
+    if prov is None:
+        return []
+
     symbols = []
-    context = state.getTool().getActiveComponentProvider().getActionContext(None)
+    context = prov.getActionContext(None)
     for act in state.getTool().getAllActions():
         if not issubclass(type(context), act.getContextClass()):
             continue
@@ -508,9 +542,26 @@ def get_bookmarks():
     return symbols
 
 
+WINDOW_NAME = "CtrlP - " + str(getCurrentProgram().getDomainFile())
+
+
 def run():
     symbols = []
-    SwingUtilities.invokeLater(lambda: SymbolFilterWindow("CtrlP", symbols).setVisible(True))
+    SwingUtilities.invokeLater(lambda: SymbolFilterWindow(WINDOW_NAME, symbols).setVisible(True))
 
 
-run()
+def run_or_restore():
+    for window in Window.getWindows():
+        if isinstance(window, JFrame):
+            if window.getTitle() == WINDOW_NAME and window.isDisplayable():
+                if not window.isShowing():
+                    window.setVisible(True)
+                else:
+                    print("Window is alredy visible. Doing nothing")
+                return
+    print("No window, spawning it")
+    run()
+
+
+if __name__ == "__main__":
+    run_or_restore()
