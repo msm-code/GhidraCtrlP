@@ -32,7 +32,7 @@ def matches(name, query):
     chunks = query.split()
     for c in chunks:
         # Special case - filtering by type, for example user searches for `wnd script`
-        if c in ["fnc", "dat", "lbl", "bkm", "wnd", "act", "scr"]:
+        if c in ["fnc", "dat", "lbl", "bkm", "wnd", "act", "scr", "txt"]:
             if not name.startswith(c):
                 return False
 
@@ -91,6 +91,7 @@ def get_order(sym):
         "wnd": 4,
         "act": 5,
         "scr": 6,
+        "txt": 7,
     }[kind]
 
 
@@ -104,6 +105,7 @@ def get_color(sym):
         "wnd": ListingColors.CommentColors.REPEATABLE,
         "act": ListingColors.XrefColors.DEFAULT,
         "scr": ListingColors.MnemonicColors.OVERRIDE,
+        "txt": ListingColors.MnemonicColors.NORMAL,
     }[kind]
 
 
@@ -202,11 +204,62 @@ class SymbolFilterWindow(JFrame):
             ))
         return filtered_symbols
 
+    def quick_exec(self, command):
+        try:
+            result = eval(command, {"__builtins__": None}, {})
+        except Exception as e:
+            result = e
+
+        def set_clipboard(txt):
+            clipboard = Toolkit.getDefaultToolkit().getSystemClipboard()
+            string_selection = StringSelection(txt)
+            clipboard.setContents(string_selection, None)
+
+        if isinstance(result, int) or isinstance(result, long):
+            strings = [
+                "hex {:x}".format(result),
+                "dec {}".format(result),
+                "oct {:o}".format(result),
+                "bin {:b}".format(result),
+            ]
+            func = currentProgram.getFunctionManager().getFunctionContaining(toAddr(result))
+            if func:
+                off = toAddr(result).subtract(func.getEntryPoint())
+                strings.append("sym " + func.getName() + ("+{:x}".format(off) if off else ""))
+        elif isinstance(result, str):
+            strings = [
+                "str " + result,
+                "hex " + result.encode("hex"),
+                "base64 " + result.encode("base64"),
+            ]
+            try:
+                strings.append("unhex " + result.replace(" ", "").decode("hex"))
+            except TypeError:
+                pass
+            try:
+                strings.append("unbase64 " + result.decode("base64"))
+            except:  # binascii.error
+                pass
+        elif isinstance(result, list):
+            strings = [str(r) for r in result]
+        else:
+            strings = [
+                "str " + str(result)
+            ]
+
+        def set_clipboard_wrap(content):
+            return lambda: set_clipboard(content)
+
+        return [SearchEntry("txt " + s, None, set_clipboard_wrap(s[4:])) for s in strings]
+
+
     def updateList(self, filter_text):
         if filter_text and filter_text[0] == '"':
             filtered_symbols = self.entries_by_search(filter_text[1:], False)
         elif filter_text and filter_text[0] == "'":
             filtered_symbols = self.entries_by_search(filter_text[1:], True)
+        elif filter_text and filter_text[0] == "=":
+            filtered_symbols = self.quick_exec(filter_text[1:])
         elif filter_text and filter_text[0] == "{":
             try:
                 needle = filter_text[1:].replace(" ", "").decode("hex")
@@ -280,7 +333,7 @@ class SymbolFilterWindow(JFrame):
         selected_symbol = self.current_symbol()
         if selected_symbol and selected_symbol.address:
             clipboard = Toolkit.getDefaultToolkit().getSystemClipboard()
-            string_selection = StringSelection(str(selected_symbol.address))
+            string_selection = StringSelection("0x" + str(selected_symbol.address))
             clipboard.setContents(string_selection, None)
 
 

@@ -108,6 +108,10 @@ It seems to work well in my tests, but it's **not** optimized (it will rescan wh
 
 In general, this script may not work efficiently with large programs (only startup time was optimized for now).
 
+There's also a primitive calculator included:
+
+* `=` - Eval the provided text (as python without locals/globals). Will display numbers and strings in various formats (including hexencode/decode).
+
 **Other notes**
 
 The plugin tries to use `"FiraCode Nerd Font Mono"` font, and if that fails it falls back to `"Monospaced"`.
