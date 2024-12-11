@@ -60,6 +60,10 @@ class SymbolLoader(SwingWorker):
         try:
             return self.get_everything()
         except:
+            # uncomment this for debug info:
+            # import traceback
+            # state.getTool().getService(ConsoleService).println(traceback.format_exc())
+
             # BUG TODO FIXME
             # When Ghidra window is closed and then reopened, the references in the window stop making sense.
             # and this thread/wtf is in a broken state.
@@ -116,6 +120,7 @@ class SymbolFilterWindow(JFrame):
         self.filtered_symbols = symbols
         self.initUI()
         self.selected_index = 0
+        self.initial_address = currentAddress  # temporary - update it on shown
 
     def initUI(self):
         self.setSize(1200, 600)
@@ -126,6 +131,7 @@ class SymbolFilterWindow(JFrame):
         me = self
         class MyComponentAdapter(ComponentAdapter):
             def componentShown(self, event):
+                self.initial_address = currentAddress  # so we can cancel navitation
                 me.inputField.setText("")
                 SymbolLoader(me).execute()
 
@@ -196,11 +202,14 @@ class SymbolFilterWindow(JFrame):
             if start < rng.getMinAddress():
                 start = rng.getMinAddress()
 
+            def wrap_goto(addr):
+                return lambda: goTo(addr)
+
             context = getBytes(start, 130)
             filtered_symbols.append(SearchEntry(
                 "dat " + str(addr) + " " + "".join(chr(b % 256) if 32 <= b < 127 else '.' for b in context),
                 addr,
-                lambda: goTo(addr)
+                wrap_goto(addr)
             ))
         return filtered_symbols
 
@@ -295,6 +304,8 @@ class SymbolFilterWindow(JFrame):
         selected_symbol = self.current_symbol()
         if selected_symbol and selected_symbol.address:
             goTo(selected_symbol.address)
+        else:
+            goTo(self.initial_address)
 
     def bookmarkSelectedLocation(self):
         selected_symbol = self.current_symbol()
@@ -336,6 +347,9 @@ class SymbolFilterWindow(JFrame):
             string_selection = StringSelection("0x" + str(selected_symbol.address))
             clipboard.setContents(string_selection, None)
 
+    def cancelNavigation(self):
+        goTo(self.initial_address)
+
 
 class MyDocumentListener(DocumentListener):
     def __init__(self, parent):
@@ -373,6 +387,7 @@ class FilterKeyAdapter(KeyAdapter):
         elif event.getKeyCode() == KeyEvent.VK_DOWN:
             self.navigate(1)
         elif event.getKeyCode() == KeyEvent.VK_ESCAPE:
+            self.parent.cancelNavigation()
             self.parent.setVisible(False)
         elif event.getKeyCode() == KeyEvent.VK_PAGE_DOWN:
             self.navigate(20)
@@ -537,7 +552,11 @@ def get_actions():
         if not issubclass(type(context), act.getContextClass()):
             continue
 
-        if not act.isValidContext(context):
+        try:
+            if not act.isValidContext(context):
+                continue
+        except:
+            # Sometimes this raises an exception - even though it shouldn't
             continue
 
         if not act.isEnabledForContext(context):
