@@ -346,6 +346,16 @@ class SymbolFilterWindow(JFrame):
             clipboard = Toolkit.getDefaultToolkit().getSystemClipboard()
             string_selection = StringSelection("0x" + str(selected_symbol.address))
             clipboard.setContents(string_selection, None)
+    
+    def goToFirstXRef(self):
+        success = False
+        selected_symbol = self.current_symbol()
+        if selected_symbol and selected_symbol.address:
+            ref_manager = currentProgram.getReferenceManager()
+            if ref_manager.getReferenceCountTo(selected_symbol.address) > 0:
+                goTo(ref_manager.getReferencesTo(selected_symbol.address).next().getFromAddress())
+                success = True
+        return success
 
     def cancelNavigation(self):
         goTo(self.initial_address)
@@ -379,7 +389,10 @@ class FilterKeyAdapter(KeyAdapter):
         self.parent.navigateToSelectedSymbol()
 
     def keyPressed(self, event):
-        if event.getKeyCode() == KeyEvent.VK_ENTER:
+        if event.isControlDown() and event.getKeyCode() == KeyEvent.VK_ENTER:
+            if self.parent.goToFirstXRef():
+                self.parent.setVisible(False)
+        elif event.getKeyCode() == KeyEvent.VK_ENTER:
             self.parent.setVisible(False)
             self.parent.runSelectedAction()
         elif event.getKeyCode() == KeyEvent.VK_UP:
