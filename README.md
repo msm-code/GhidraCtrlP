@@ -76,6 +76,7 @@ Some of the available data types are visible on the screenshot below:
 Other than the obvious (arrows, home/end, page up/down), you can press:
 
 * `ENTER` - accept the current selection (go to the selected location, or execute the selected script, etc).
+* `Ctrl+Enter` - Go to the first XRef of the selected location if one exists.
 * `ESC` - close the current window without doing anything
 * `Ctrl+c` - copy a text of the highlighted element
 * `Ctrl+Shift+c` - copy address (if any) of the highlighted element
