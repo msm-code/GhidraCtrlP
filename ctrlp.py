@@ -8,7 +8,7 @@ import re
 from ghidra.program.flatapi import FlatProgramAPI
 from ghidra.program.model.symbol import SymbolType, SourceType
 from ghidra.program.model.listing import BookmarkType
-from ghidra.app.services import ConsoleService
+from ghidra.app.services import ConsoleService, CodeViewerService
 from ghidra.util.task import TaskMonitor
 from ghidra.app.script import GhidraScriptUtil
 from ghidra.app.util.viewer.field import ListingColors
@@ -120,7 +120,7 @@ class SymbolFilterWindow(JFrame):
         self.filtered_symbols = symbols
         self.initUI()
         self.selected_index = 0
-        self.initial_address = currentAddress  # temporary - update it on shown
+        self.initial_address = currentAddress
 
     def initUI(self):
         self.setSize(1200, 600)
@@ -131,7 +131,12 @@ class SymbolFilterWindow(JFrame):
         me = self
         class MyComponentAdapter(ComponentAdapter):
             def componentShown(self, event):
-                self.initial_address = currentAddress  # so we can cancel navitation
+                codeViewerService = state.getTool().getService(CodeViewerService)
+                if codeViewerService:
+                    # We can't just use currentAddress because of a technicality:
+                    # the variable in script is never updated and stays the same.
+                    new_address = codeViewerService.getCurrentLocation().getAddress()
+                    self.initial_address = new_address  # so we can cancel navigation
                 me.inputField.setText("")
                 SymbolLoader(me).execute()
 
