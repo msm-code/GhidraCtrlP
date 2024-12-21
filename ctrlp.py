@@ -346,7 +346,7 @@ class SymbolFilterWindow(JFrame):
             clipboard = Toolkit.getDefaultToolkit().getSystemClipboard()
             string_selection = StringSelection("0x" + str(selected_symbol.address))
             clipboard.setContents(string_selection, None)
-    
+
     def goToFirstXRef(self):
         success = False
         selected_symbol = self.current_symbol()
