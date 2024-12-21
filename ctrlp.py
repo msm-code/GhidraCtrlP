@@ -649,7 +649,6 @@ def run_or_restore():
                 else:
                     print("Window is alredy visible. Doing nothing")
                 return
-    print("No window, spawning it")
     run()
 
 
