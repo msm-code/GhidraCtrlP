@@ -284,6 +284,14 @@ class SymbolFilterWindow(JFrame):
             filtered_symbols = [
                 sym for sym in self.symbols if matches(sym.text, filter_text)
             ]
+            if len(filtered_symbols) > 1000:
+                overflow = len(filtered_symbols) - 1000
+                filtered_symbols = filtered_symbols[:1000]
+                filtered_symbols.append(SearchEntry(
+                    "txt and " + str(overflow) + " more...",
+                    None,
+                    lambda: None
+                ))
             filtered_symbols = sorted(filtered_symbols, key=get_order)
 
         self.filtered_symbols = filtered_symbols
