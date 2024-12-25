@@ -32,7 +32,7 @@ def matches(name, query):
     chunks = query.split()
     for c in chunks:
         # Special case - filtering by type, for example user searches for `wnd script`
-        if c in ["fnc", "dat", "lbl", "bkm", "wnd", "act", "scr", "txt"]:
+        if c in ["fnc", "dat", "lbl", "bkm", "wnd", "act", "scr", "txt", "ref"]:
             if not name.startswith(c):
                 return False
 
@@ -96,6 +96,7 @@ def get_order(sym):
         "act": 5,
         "scr": 6,
         "txt": 7,
+        "ref": 8,
     }[kind]
 
 
@@ -110,17 +111,24 @@ def get_color(sym):
         "act": ListingColors.XrefColors.DEFAULT,
         "scr": ListingColors.MnemonicColors.OVERRIDE,
         "txt": ListingColors.MnemonicColors.NORMAL,
+        "ref": ListingColors.REGISTER,
     }[kind]
 
 
 class SymbolFilterWindow(JFrame):
     def __init__(self, title, symbols):
         super(SymbolFilterWindow, self).__init__(title)
+        self.special_symbols = []
         self.symbols = symbols
         self.filtered_symbols = symbols
         self.initUI()
         self.selected_index = 0
         self.initial_address = currentAddress
+        # special_symbols are currently used in the "xref search mode" -
+        # we are searching in them instead of self.symbols
+        # Special search mode is enabled when self.special_symbols is not empty.
+        # We don't reuse self.symbols for this, because populating self.symbols
+        # takes time, and we want to have cached results when opening ctrl+p.
 
     def initUI(self):
         self.setSize(1200, 600)
@@ -136,9 +144,10 @@ class SymbolFilterWindow(JFrame):
                     # We can't just use currentAddress because of a technicality:
                     # the variable in script is never updated and stays the same.
                     new_address = codeViewerService.getCurrentLocation().getAddress()
-                    self.initial_address = new_address  # so we can cancel navigation
-                me.inputField.setText("")
-                SymbolLoader(me).execute()
+                    me.initial_address = new_address  # so we can cancel navigation
+                me.special_symbols = []  # disable special search mode when showing
+                me.inputField.setText("")  # clear the input field
+                SymbolLoader(me).execute()  # start updating symbols in the background
 
             def componentHidden(self, event): pass
             def componentMoved(self, event): pass
@@ -281,8 +290,14 @@ class SymbolFilterWindow(JFrame):
                 needle = ""
             filtered_symbols = self.entries_by_search(needle, False)
         else:
+            symbols_to_search = self.symbols
+            f=open("/tmp/a.txt", "w")
+            f.write(str(dir(self)))
+            f.flush()
+            if self.special_symbols:
+                symbols_to_search = self.special_symbols
             filtered_symbols = [
-                sym for sym in self.symbols if matches(sym.text, filter_text)
+                sym for sym in symbols_to_search if matches(sym.text, filter_text)
             ]
             if len(filtered_symbols) > 1000:
                 overflow = len(filtered_symbols) - 1000
@@ -319,6 +334,37 @@ class SymbolFilterWindow(JFrame):
             goTo(selected_symbol.address)
         else:
             goTo(self.initial_address)
+
+    def enterXrefMode(self):
+        selected_symbol = self.current_symbol()
+        if selected_symbol and selected_symbol.address:
+            ref_manager = currentProgram.getReferenceManager()
+            self.special_symbols = []
+            func_manager = getCurrentProgram().getFunctionManager()
+            for ref in ref_manager.getReferencesTo(selected_symbol.address):
+                source = ref.getFromAddress()
+
+                xref_func = func_manager.getFunctionContaining(source)
+                if xref_func is None:
+                    codeunit = currentProgram.getListing().getCodeUnitContaining(source)
+                    if codeunit is not None:
+                        text = "lbl {:x} {}".format(source.getOffset(), str(codeunit))
+                    else:
+                        text = "dat {:x}".format(source.getOffset())
+                else:
+                    offset = source.subtract(xref_func.getEntryPoint())
+                    text = "fnc {}+{:x}".format(xref_func.getPrototypeString(True, False), offset)
+
+                def wrap_goto(addr):
+                    return lambda: goTo(addr)
+
+                sym = SearchEntry(
+                    text,
+                    source,
+                    wrap_goto(source)
+                )
+                self.special_symbols.append(sym)
+        self.updateList(self.inputField.getText())
 
     def bookmarkSelectedLocation(self):
         selected_symbol = self.current_symbol()
@@ -413,8 +459,13 @@ class FilterKeyAdapter(KeyAdapter):
         elif event.getKeyCode() == KeyEvent.VK_DOWN:
             self.navigate(1)
         elif event.getKeyCode() == KeyEvent.VK_ESCAPE:
-            self.parent.cancelNavigation()
-            self.parent.setVisible(False)
+            if self.parent.special_symbols:
+                # If we are in a special mode, clean it instead of closing entirely
+                self.parent.special_symbols = []
+                self.parent.updateList(self.parent.inputField.getText())
+            else:
+                self.parent.cancelNavigation()
+                self.parent.setVisible(False)
         elif event.getKeyCode() == KeyEvent.VK_PAGE_DOWN:
             self.navigate(20)
         elif event.getKeyCode() == KeyEvent.VK_PAGE_UP:
@@ -425,6 +476,8 @@ class FilterKeyAdapter(KeyAdapter):
             self.navigate(-2**30)
         elif event.isControlDown() and event.getKeyCode() == KeyEvent.VK_D:
             self.parent.bookmarkSelectedLocation()
+        elif event.isControlDown() and event.getKeyCode() == KeyEvent.VK_R:
+            self.parent.enterXrefMode()
         elif event.isControlDown() and event.isShiftDown() and event.getKeyCode() == KeyEvent.VK_C:
             self.parent.copyAddressToClipboard()
         elif event.isControlDown() and event.getKeyCode() == KeyEvent.VK_C:

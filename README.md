@@ -47,9 +47,10 @@ Other than the obvious (arrows, home/end, page up/down), you can press:
 
 | Keybinding | Description                    |
 | --------- | ------------------------------- |
-| `ENTER` | accept the current selection (go to the selected location, or execute the selected script, etc). |
+| `Enter` | accept the current selection (go to the selected location, or execute the selected script, etc). |
 | `Ctrl+Enter` | Go to the first XRef of the selected location if one exists. |
-| `ESC` | close the current window without doing anything |
+| `Esc` | close the current window without doing anything |
+| `Ctrl+r` | start a XRef search - start searching for the Xrefs to the currently selected element. Cancel with Esc. |
 | `Ctrl+c` | copy a text of the highlighted element |
 | `Ctrl+Shift+c` | copy address (if any) of the highlighted element |
 | `Ctrl+d` | toggle a quick bookmark at the highlighted location (add, or remove if exists). Bookmarked symbols are shown with a `[*]` tag at the end (you can filter by this too). |
