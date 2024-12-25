@@ -85,20 +85,6 @@ class SymbolLoader(SwingWorker):
         except Exception as e:
             print("Error loading symbols" + str(e))
 
-def get_order(sym):
-    kind = sym.text.split()[0]
-    return {
-        "fnc": 0,
-        "dat": 1,
-        "lbl": 2,
-        "bkm": 3,
-        "wnd": 4,
-        "act": 5,
-        "scr": 6,
-        "txt": 7,
-        "ref": 8,
-    }[kind]
-
 
 def get_color(sym):
     kind = sym.text.split()[0]
@@ -130,6 +116,10 @@ class SymbolFilterWindow(JFrame):
         # We don't reuse self.symbols for this, because populating self.symbols
         # takes time, and we want to have cached results when opening ctrl+p.
 
+        self.recent_symbols = {}
+        # keep track of recently used symbols. We want to show recent symbols
+        # at the top of the search list, so it's easy to repeat the search.
+
     def initUI(self):
         self.setSize(1200, 600)
         self.setResizable(False)
@@ -147,6 +137,9 @@ class SymbolFilterWindow(JFrame):
                     me.initial_address = new_address  # so we can cancel navigation
                 me.special_symbols = []  # disable special search mode when showing
                 me.inputField.setText("")  # clear the input field
+                if me.symbols:
+                    me.symbolList.setSelectedIndex(0)
+                    me.symbolList.ensureIndexIsVisible(me.symbolList.getSelectedIndex())
                 SymbolLoader(me).execute()  # start updating symbols in the background
 
             def componentHidden(self, event): pass
@@ -275,6 +268,21 @@ class SymbolFilterWindow(JFrame):
 
         return [SearchEntry("txt " + s, None, set_clipboard_wrap(s[4:])) for s in strings]
 
+    def get_order(self, sym):
+        kind = sym.text.split()[0]
+        primary_order = -self.recent_symbols.get(sym.text, -1)
+        secondary_order = {
+            "fnc": 0,
+            "dat": 1,
+            "lbl": 2,
+            "bkm": 3,
+            "wnd": 4,
+            "act": 5,
+            "scr": 6,
+            "txt": 7,
+            "ref": 8,
+        }[kind]
+        return (primary_order, secondary_order)
 
     def updateList(self, filter_text):
         if filter_text and filter_text[0] == '"':
@@ -291,14 +299,13 @@ class SymbolFilterWindow(JFrame):
             filtered_symbols = self.entries_by_search(needle, False)
         else:
             symbols_to_search = self.symbols
-            f=open("/tmp/a.txt", "w")
-            f.write(str(dir(self)))
-            f.flush()
             if self.special_symbols:
                 symbols_to_search = self.special_symbols
             filtered_symbols = [
                 sym for sym in symbols_to_search if matches(sym.text, filter_text)
             ]
+            # we have to search first, because we can't skip high-priority symbols :(
+            filtered_symbols = sorted(filtered_symbols, key=self.get_order)
             if len(filtered_symbols) > 1000:
                 overflow = len(filtered_symbols) - 1000
                 filtered_symbols = filtered_symbols[:1000]
@@ -307,7 +314,6 @@ class SymbolFilterWindow(JFrame):
                     None,
                     lambda: None
                 ))
-            filtered_symbols = sorted(filtered_symbols, key=get_order)
 
         self.filtered_symbols = filtered_symbols
         self.symbolList.setListData(Vector([sym.text for sym in filtered_symbols]))
@@ -323,9 +329,17 @@ class SymbolFilterWindow(JFrame):
             return None
         return self.filtered_symbols[selected_index]
 
+    def updateRecent(self, selected_symbol):
+        next_index = len(self.recent_symbols)
+        f = open("/tmp/a.txt", "w")
+        f.write(str(self.recent_symbols))
+        f.close()
+        self.recent_symbols[selected_symbol.text] = next_index
+
     def runSelectedAction(self):
         selected_symbol = self.current_symbol()
         if selected_symbol:
+            self.updateRecent(selected_symbol)
             selected_symbol.action()
 
     def navigateToSelectedSymbol(self):
