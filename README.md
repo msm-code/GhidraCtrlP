@@ -1,25 +1,23 @@
 # Ghidra CtrlP Script
 
-Ghidra is great, but I hate how mouse-driven it is by default. One thing
-I love in VS Code is the Ctrl+P file switcher and command pallete. I figured,
-it would be nice to have this in ghidra.
+Ghidra is great, but very mouse-driven by default. Some modern editors (like VS Code) provide a quick file switcher/command
+pallete, commonly bound to Ctrl+P file switcher and command pallete. I decided,
+that it would be nice to have this in ghidra.
 
 With this script you can just press Ctrl+P and do ~~anything~~ a lot.
 
-![](./docs/image.png)
+![recording](https://github.com/user-attachments/assets/198de0f8-d6d8-4169-9d0f-5d6dc563df78)
 
 ### Installation
 
-**Core:** Put `ctrlp.py` in `~/ghidra_scripts` or your prefered script location.
-Then go to `Window -> Script manager` and reload.
-
-**Launcher:** Put `CtrlPQuicklaunchScript.java` in `~/ghidra_scripts`, and assign
-a keybinding (the launcher role is to cache `ctrlp.py` script).
+**Core:** Put `ctrlp.py` and `CtrlPQuicklaunchScript.java` in `~/ghidra_scripts` or your
+prefered script location. Then go to `Window -> Script manager` and reload.
 
 I strongly recommend adding a keyboard shortcut (in `Window -> Script manager`).
-If you don't want to sue `Ctrl+P`, you can assign any other hotkey you want. If you use `Ctrl+P`,
-remember to unasign `Print` from the `Tool Options -> Keybindings`, otherwise Ghidra will
-ask you an annoying question every time.
+Add a keybinding to `CtrlPQuicklaunchScript.java` (don't launch `ctrlp.py` directly - the launcher role is to make this much faster).
+
+You don't have to use `Ctrl+P`, you can assign any other hotkey if youp prefer. But if you use `Ctrl+P`,
+remember to unasign `Print` from the `Tool Options -> Keybindings` (to avoid keybinding conflict).
 
 ### Basic features
 
