@@ -10,7 +10,7 @@ from ghidra.program.model.symbol import SymbolType, SourceType
 from ghidra.program.model.listing import BookmarkType
 from ghidra.app.services import ConsoleService, CodeViewerService
 from ghidra.util.task import TaskMonitor
-from ghidra.app.script import GhidraScriptUtil
+from ghidra.app.script import GhidraScriptUtil, GhidraState
 from ghidra.app.util.viewer.field import ListingColors
 from javax.swing import JFrame, JTextField, JList, JScrollPane, SwingUtilities, JPanel, DefaultListCellRenderer, SwingWorker, UIManager
 from javax.swing.event import DocumentListener
@@ -20,6 +20,15 @@ from java.awt.event import KeyAdapter, KeyEvent, ComponentAdapter
 from java.util import Vector
 from java.awt import Toolkit
 from java.awt.datatransfer import StringSelection
+from __main__ import (
+    getBytes,
+    currentAddress,
+    getState,
+    getCurrentProgram,
+    toAddr,
+    goTo,
+    monitor,
+)
 
 
 def matches(name, query):
@@ -40,6 +49,52 @@ def matches(name, query):
         if ndx < 0:
             return False
     return True
+
+
+def makeState():
+    """Creates a new (current) state object and returns it
+
+    We can't just use getState(), because it's a snapshot of program state.
+    For tool and project it doesn't matter. For program it also doesn't matter,
+    but we need to remember to use getCurrentProgram() instead of currentProgram
+    in the script code (the variable is also constant, while in some cases -
+    like multitab windows - current project may change for a CtrlP window.
+    Finally, selection changes all the time, so we need to update it here."""
+    oldState = getState()
+
+    codeViewerService = oldState.getTool().getService(CodeViewerService)
+    if codeViewerService:
+        currLocation = codeViewerService.getCurrentLocation()
+        currSelection = codeViewerService.getCurrentSelection()
+        currHighlight = codeViewerService.getListingPanel().getProgramHighlight()
+    else:
+        currLocation = oldState.getCurrentLocation()
+        currSelection = oldState.getCurrentSelection()
+        currHighlight = oldState.getCurrentHighlight()
+
+    return GhidraState(
+        oldState.getTool(),  # I think this can't change
+        oldState.getProject(),  # I think this can't change
+        getCurrentProgram(),
+        currLocation,
+        currSelection,
+        currHighlight,
+    )
+
+
+class ScriptExecutor(SwingWorker):
+    def __init__(self, script):
+        super(ScriptExecutor, self).__init__()
+        self.script = script
+
+    def doInBackground(self):
+        con = makeState().getTool().getService(ConsoleService)
+        prov = GhidraScriptUtil.getProvider(self.script)
+        inst = prov.getScriptInstance(self.script, con.getStdOut())
+        inst.execute(makeState(), monitor, con.getStdOut())
+
+    def done(self):
+        pass
 
 
 class SymbolLoader(SwingWorker):
@@ -85,7 +140,6 @@ class SymbolLoader(SwingWorker):
         except Exception as e:
             print("Error loading symbols" + str(e))
 
-
 def get_color(sym):
     kind = sym.text.split()[0]
     return {
@@ -129,7 +183,7 @@ class SymbolFilterWindow(JFrame):
         me = self
         class MyComponentAdapter(ComponentAdapter):
             def componentShown(self, event):
-                codeViewerService = state.getTool().getService(CodeViewerService)
+                codeViewerService = makeState().getTool().getService(CodeViewerService)
                 if codeViewerService:
                     # We can't just use currentAddress because of a technicality:
                     # the variable in script is never updated and stays the same.
@@ -198,7 +252,7 @@ class SymbolFilterWindow(JFrame):
 
         filtered_symbols = []
         flatapi = FlatProgramAPI(getCurrentProgram())
-        occurs = list(flatapi.findBytes(currentProgram.getMinAddress(), pattern, 100))
+        occurs = list(flatapi.findBytes(getCurrentProgram().getMinAddress(), pattern, 100))
 
         mem = getCurrentProgram().getMemory()
 
@@ -231,29 +285,29 @@ class SymbolFilterWindow(JFrame):
             string_selection = StringSelection(txt)
             clipboard.setContents(string_selection, None)
 
-        if isinstance(result, int) or isinstance(result, long):
+        if isinstance(result, int) or isinstance(result, long):  # type: ignore (py2)
             strings = [
                 "hex {:x}".format(result),
                 "dec {}".format(result),
                 "oct {:o}".format(result),
                 "bin {:b}".format(result),
             ]
-            func = currentProgram.getFunctionManager().getFunctionContaining(toAddr(result))
+            func = getCurrentProgram().getFunctionManager().getFunctionContaining(toAddr(result))
             if func:
                 off = toAddr(result).subtract(func.getEntryPoint())
                 strings.append("sym " + func.getName() + ("+{:x}".format(off) if off else ""))
         elif isinstance(result, str):
             strings = [
                 "str " + result,
-                "hex " + result.encode("hex"),
-                "base64 " + result.encode("base64"),
+                "hex " + result.encode("hex"),  # type: ignore (py2)
+                "base64 " + result.encode("base64"),  # type: ignore (py2)
             ]
             try:
-                strings.append("unhex " + result.replace(" ", "").decode("hex"))
+                strings.append("unhex " + result.replace(" ", "").decode("hex"))  # type: ignore (py2)
             except TypeError:
                 pass
             try:
-                strings.append("unbase64 " + result.decode("base64"))
+                strings.append("unbase64 " + result.decode("base64"))  # type: ignore (py2)
             except:  # binascii.error
                 pass
         elif isinstance(result, list):
@@ -331,9 +385,6 @@ class SymbolFilterWindow(JFrame):
 
     def updateRecent(self, selected_symbol):
         next_index = len(self.recent_symbols)
-        f = open("/tmp/a.txt", "w")
-        f.write(str(self.recent_symbols))
-        f.close()
         self.recent_symbols[selected_symbol.text] = next_index
 
     def runSelectedAction(self):
@@ -352,7 +403,7 @@ class SymbolFilterWindow(JFrame):
     def enterXrefMode(self):
         selected_symbol = self.current_symbol()
         if selected_symbol and selected_symbol.address:
-            ref_manager = currentProgram.getReferenceManager()
+            ref_manager = getCurrentProgram().getReferenceManager()
             self.special_symbols = []
             func_manager = getCurrentProgram().getFunctionManager()
             for ref in ref_manager.getReferencesTo(selected_symbol.address):
@@ -360,7 +411,7 @@ class SymbolFilterWindow(JFrame):
 
                 xref_func = func_manager.getFunctionContaining(source)
                 if xref_func is None:
-                    codeunit = currentProgram.getListing().getCodeUnitContaining(source)
+                    codeunit = getCurrentProgram().getListing().getCodeUnitContaining(source)
                     if codeunit is not None:
                         text = "lbl {:x} {}".format(source.getOffset(), str(codeunit))
                     else:
@@ -424,7 +475,7 @@ class SymbolFilterWindow(JFrame):
         success = False
         selected_symbol = self.current_symbol()
         if selected_symbol and selected_symbol.address:
-            ref_manager = currentProgram.getReferenceManager()
+            ref_manager = getCurrentProgram().getReferenceManager()
             if ref_manager.getReferenceCountTo(selected_symbol.address) > 0:
                 goTo(ref_manager.getReferencesTo(selected_symbol.address).next().getFromAddress())
                 success = True
@@ -594,11 +645,8 @@ def action_entry(context, act):
 
 
 def run_script(scr_file):
-    con = state.getTool().getService(ConsoleService)
     scr = GhidraScriptUtil.findScriptByName(scr_file.getName())
-    prov = GhidraScriptUtil.getProvider(scr)
-    inst = prov.getScriptInstance(scr, con.getStdOut())
-    inst.execute(state, TaskMonitor.DUMMY, con.getStdOut())
+    ScriptExecutor(scr).execute()
 
 
 def script_entry(scr):
@@ -611,7 +659,7 @@ def script_entry(scr):
 
 def component_provider_entry(cp):
     def show_and_focus():
-        state.getTool().showComponentProvider(cp, True)
+        makeState().getTool().showComponentProvider(cp, True)
         cp.toFront()
 
     return SearchEntry(
@@ -635,13 +683,13 @@ def bookmark_entry(bookmark):
 
 
 def get_actions():
-    prov = state.getTool().getActiveComponentProvider()
+    prov = makeState().getTool().getActiveComponentProvider()
     if prov is None:
         return []
 
     symbols = []
     context = prov.getActionContext(None)
-    for act in state.getTool().getAllActions():
+    for act in makeState().getTool().getAllActions():
         if not issubclass(type(context), act.getContextClass()):
             continue
 
@@ -683,7 +731,7 @@ def get_symbols():
 
 def get_component_providers():
     symbols = []
-    for cp in state.getTool().getWindowManager().getComponentProviders(Object):
+    for cp in getState().getTool().getWindowManager().getComponentProviders(Object):
         symbols.append(component_provider_entry(cp))
 
     return symbols
