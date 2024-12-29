@@ -82,6 +82,24 @@ def makeState():
     )
 
 
+def transientGoto(addr):
+    """Goto, but without saving it in the history"""
+    codeViewerService = makeState().getTool().getService(CodeViewerService)
+    if codeViewerService:
+        from ghidra.program.util import ProgramLocation
+        codeViewerService.goTo(ProgramLocation(getCurrentProgram(), addr), True)
+    else:
+        # fallback
+        goTo(addr)
+
+
+def wrap_goto(addr):
+    """This is a wrapper for goTo, returns a function that goToes to the addr
+
+    the point is to capture addr in a closure (something that won't happen in a lambda"""
+    return lambda: goTo(addr)
+
+
 class ScriptExecutor(SwingWorker):
     def __init__(self, script):
         super(ScriptExecutor, self).__init__()
@@ -139,6 +157,22 @@ class SymbolLoader(SwingWorker):
             SwingUtilities.invokeLater(refresh_data)
         except Exception as e:
             print("Error loading symbols" + str(e))
+
+
+def prettyPrintAddress(source):
+    func_manager = getCurrentProgram().getFunctionManager()
+    xref_func = func_manager.getFunctionContaining(source)
+    if xref_func is None:
+        codeunit = getCurrentProgram().getListing().getCodeUnitContaining(source)
+        if codeunit is not None:
+            text = "lbl {:x} {}".format(source.getOffset(), str(codeunit))
+        else:
+            text = "dat {:x}".format(source.getOffset())
+    else:
+        offset = source.subtract(xref_func.getEntryPoint())
+        text = "fnc {}+{:x}".format(xref_func.getPrototypeString(True, False), offset)
+    return text
+
 
 def get_color(sym):
     kind = sym.text.split()[0]
@@ -262,9 +296,6 @@ class SymbolFilterWindow(JFrame):
             rng = mem.getRangeContaining(addr)
             if start < rng.getMinAddress():
                 start = rng.getMinAddress()
-
-            def wrap_goto(addr):
-                return lambda: goTo(addr)
 
             context = getBytes(start, 130)
             filtered_symbols.append(SearchEntry(
@@ -396,33 +427,19 @@ class SymbolFilterWindow(JFrame):
     def navigateToSelectedSymbol(self):
         selected_symbol = self.current_symbol()
         if selected_symbol and selected_symbol.address:
-            goTo(selected_symbol.address)
+            transientGoto(selected_symbol.address)
         else:
-            goTo(self.initial_address)
+            transientGoto(self.initial_address)
 
     def enterXrefMode(self):
         selected_symbol = self.current_symbol()
         if selected_symbol and selected_symbol.address:
             ref_manager = getCurrentProgram().getReferenceManager()
             self.special_symbols = []
-            func_manager = getCurrentProgram().getFunctionManager()
             for ref in ref_manager.getReferencesTo(selected_symbol.address):
                 source = ref.getFromAddress()
 
-                xref_func = func_manager.getFunctionContaining(source)
-                if xref_func is None:
-                    codeunit = getCurrentProgram().getListing().getCodeUnitContaining(source)
-                    if codeunit is not None:
-                        text = "lbl {:x} {}".format(source.getOffset(), str(codeunit))
-                    else:
-                        text = "dat {:x}".format(source.getOffset())
-                else:
-                    offset = source.subtract(xref_func.getEntryPoint())
-                    text = "fnc {}+{:x}".format(xref_func.getPrototypeString(True, False), offset)
-
-                def wrap_goto(addr):
-                    return lambda: goTo(addr)
-
+                text = prettyPrintAddress(source)
                 sym = SearchEntry(
                     text,
                     source,
